@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rclone Uploader</title>
+    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #stats {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Rclone Uploader Configuration</h1>
+        <form action="/update-config" method="post">
+            <label for="qbit_downloads_basedir">Base Directory:</label>
+            <input type="text" id="qbit_downloads_basedir" name="qbit_downloads_basedir" value="{{.QbitDownloadsBaseDir}}">
+
+            <label for="watch_dirs">Watch Directories (comma-separated):</label>
+            <input type="text" id="watch_dirs" name="watch_dirs" value="{{range $index, $element := .WatchDirs}}{{if $index}},{{end}}{{$element}}{{end}}">
+
+            <label for="copy_params">Copy Parameters:</label>
+            <input type="text" id="copy_params" name="copy_params" value="{{.CopyParams}}">
+
+            <label for="rclone_remote_name">Rclone Remote Name:</label>
+            <input type="text" id="rclone_remote_name" name="rclone_remote_name" value="{{.RcloneRemoteName}}">
+
+            <button type="submit">Update Configuration</button>
+        </form>
+
+        <h2>Upload Statistics</h2>
+        <div id="stats" hx-get="/stats" hx-trigger="every 1s">
+            Waiting for upload statistics...
+        </div>
+    </div>
+</body>
+</html>
