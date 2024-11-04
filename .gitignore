@@ -7,3 +7,4 @@ Dockerfile
 docker-compose.yml
 data/
 *.log
+.idea/
