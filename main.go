@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -90,7 +91,7 @@ func main() {
 	go app.watchDirectories(ctx)
 
 	log.Println("Server starting on :8050")
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal("Server error:", err)
 	}
 }
