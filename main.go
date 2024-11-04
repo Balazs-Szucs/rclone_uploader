@@ -195,10 +195,16 @@ func uploadFile(path string) {
 		return
 	}
 
+	type StatusUpdate struct {
+		elapsedTime    string
+		fileProgresses []string
+		transferred    string
+	}
+
 	go func() {
 		reader := bufio.NewReader(stdoutPipe)
-		var outputBuilder strings.Builder
-		capturing := false
+		var currentUpdate StatusUpdate
+		var buffer strings.Builder
 
 		for {
 			line, err := reader.ReadString('\n')
@@ -210,40 +216,67 @@ func uploadFile(path string) {
 				return
 			}
 
-			if strings.Contains(line, "Transferred:") {
+			line = strings.TrimSpace(line)
+
+			if strings.Contains(line, "Transferred:") && strings.Contains(line, "* ") {
 				parts := strings.Split(line, "Transferred:")
-				for i, part := range parts {
-					if i > 0 {
-						outputBuilder.WriteString("\nTransferred:")
+				if len(parts) == 2 {
+					filePart := strings.TrimSpace(parts[0])
+					if strings.HasPrefix(filePart, "* ") {
+						currentUpdate.fileProgresses = append(currentUpdate.fileProgresses, filePart)
 					}
-					outputBuilder.WriteString(part)
+					transferPart := strings.TrimSpace("Transferred:" + parts[1])
+					if transferPart != "" {
+						currentUpdate.transferred = transferPart
+					}
 				}
-			} else {
-				outputBuilder.WriteString(line)
+				continue
 			}
 
-			if strings.HasPrefix(line, "Transferring:") {
-				capturing = true
+			switch {
+			case strings.HasPrefix(line, "Elapsed time:"):
+				currentUpdate.elapsedTime = line
+			case strings.HasPrefix(line, "* "):
+				currentUpdate.fileProgresses = append(currentUpdate.fileProgresses, line)
+			case strings.HasPrefix(line, "Transferred:"):
+				currentUpdate.transferred = line
 			}
 
-			if capturing {
-				if strings.HasPrefix(line, "Transferred:") {
-					capturing = false
-					updateStats(outputBuilder.String())
-					outputBuilder.Reset()
-				} else {
-					outputBuilder.WriteString(line)
+			if currentUpdate.transferred != "" {
+				buffer.Reset()
+
+				if currentUpdate.elapsedTime != "" {
+					buffer.WriteString(currentUpdate.elapsedTime)
+					buffer.WriteString("\n\n")
 				}
+
+				if len(currentUpdate.fileProgresses) > 0 {
+					buffer.WriteString("Transferring Files:\n")
+					for _, progress := range currentUpdate.fileProgresses {
+						buffer.WriteString(progress)
+						buffer.WriteString("\n")
+					}
+					buffer.WriteString("\n")
+				}
+
+				buffer.WriteString("Overall Progress:\n")
+				buffer.WriteString(currentUpdate.transferred)
+				buffer.WriteString("\n")
+
+				updateStats(buffer.String())
+
+				currentUpdate = StatusUpdate{}
 			}
 		}
 	}()
+
 	if err := cmd.Wait(); err != nil {
 		log.Printf("Error during rclone upload: %v", err)
 		return
 	}
 
 	log.Printf("Successfully uploaded %s to %s", sourcePath, destPath)
-	updateStats(fmt.Sprintf("Successfully uploaded %s to %s", sourcePath, destPath))
+	updateStats(fmt.Sprintf("Successfully uploaded %s to %s\n", sourcePath, destPath))
 
 	uploadedFilesMutex.Lock()
 	uploadedFiles[path] = true
