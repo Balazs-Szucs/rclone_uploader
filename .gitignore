@@ -1,0 +1,9 @@
+config.json
+uploaded_files.txt
+.git
+.gitignore
+README.md
+Dockerfile
+docker-compose.yml
+data/
+*.log
