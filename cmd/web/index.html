@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rclone_uploader</title>
+    <style>
+        body {
+            background-color: #f7fafc;
+            color: #1a202c;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .title {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4c51bf;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .output, .files {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .output {
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+        }
+        .files ul {
+            list-style-type: disc;
+            padding-left: 20px;
+        }
+        .reset-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #e53e3e;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button[type="submit"] {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4c51bf;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Rclone Output</h1>
+        <div class="output" id="output"></div>
+        <h2 class="title">Uploaded Files</h2>
+        <div class="files">
+            <ul id="filesList"></ul>
+        </div>
+        <button class="reset-button" id="resetButton">Reset Database</button>
+        <h2 class="title">Edit Environment Variables</h2>
+        <form id="envForm">
+            <label for="QBIT_DOWNLOADS_BASE_DIR">QBIT_DOWNLOADS_BASE_DIR:</label>
+            <input type="text" id="QBIT_DOWNLOADS_BASE_DIR" name="QBIT_DOWNLOADS_BASE_DIR"><br>
+            <label for="RCLONE_REMOTE_NAME">RCLONE_REMOTE_NAME:</label>
+            <input type="text" id="RCLONE_REMOTE_NAME" name="RCLONE_REMOTE_NAME"><br>
+            <label for="WATCH_SUBDIRS">WATCH_SUBDIRS:</label>
+            <input type="text" id="WATCH_SUBDIRS" name="WATCH_SUBDIRS"><br>
+            <label for="COPY_PARAMS">COPY_PARAMS:</label>
+            <input type="text" id="COPY_PARAMS" name="COPY_PARAMS"><br>
+            <button type="submit">Save</button>
+        </form>
+    </div>
+<script>
+    const outputDiv = document.getElementById('output');
+    const filesList = document.getElementById('filesList');
+    const resetButton = document.getElementById('resetButton');
+    const socket = new WebSocket('ws://localhost:8080/websocket');
+
+    socket.onmessage = function(event) {
+        const message = event.data;
+        if (message.startsWith("new_file:")) {
+            const fileName = message.substring(9);
+            const li = document.createElement('li');
+            li.textContent = fileName + " - just now";
+            filesList.appendChild(li);
+        } else if (message === "reset") {
+            fetchFiles();
+        } else {
+            outputDiv.textContent = message;
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+    };
+
+    socket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+
+    function fetchFiles() {
+        fetch('/files')
+            .then(response => response.json())
+            .then(files => {
+                filesList.innerHTML = '';
+                files.forEach(file => {
+                    const li = document.createElement('li');
+                    li.textContent = `${file.name} - ${file.uploaded_at}`;
+                    filesList.appendChild(li);
+                });
+            })
+            .catch(error => console.error('Error fetching files:', error));
+    }
+
+    fetchFiles();
+
+    resetButton.addEventListener('click', () => {
+        fetch('/reset', { method: 'POST' })
+            .then(response => {
+                if (response.ok) {
+                    fetchFiles();
+                } else {
+                    console.error('Failed to reset database');
+                }
+            })
+            .catch(error => console.error('Error resetting database:', error));
+    });
+
+    function fetchEnvVars() {
+        fetch('/env')
+            .then(response => response.json())
+            .then(envVars => {
+                document.getElementById('QBIT_DOWNLOADS_BASE_DIR').value = envVars.QBIT_DOWNLOADS_BASE_DIR;
+                document.getElementById('RCLONE_REMOTE_NAME').value = envVars.RCLONE_REMOTE_NAME;
+                document.getElementById('WATCH_SUBDIRS').value = envVars.WATCH_SUBDIRS;
+                document.getElementById('COPY_PARAMS').value = envVars.COPY_PARAMS;
+            })
+            .catch(error => console.error('Error fetching environment variables:', error));
+    }
+
+    fetchEnvVars();
+
+    document.getElementById('envForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const envVars = {
+            QBIT_DOWNLOADS_BASE_DIR: document.getElementById('QBIT_DOWNLOADS_BASE_DIR').value,
+            RCLONE_REMOTE_NAME: document.getElementById('RCLONE_REMOTE_NAME').value,
+            WATCH_SUBDIRS: document.getElementById('WATCH_SUBDIRS').value,
+            COPY_PARAMS: document.getElementById('COPY_PARAMS').value,
+        };
+
+        fetch('/update-env', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(envVars),
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Environment variables updated successfully');
+            } else {
+                alert('Failed to update environment variables');
+            }
+        })
+        .catch(error => console.error('Error updating environment variables:', error));
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    restart: unless-stopped
+    ports:
+      - ${PORT}:${PORT}
+    environment:
+      APP_ENV: ${APP_ENV}
+      PORT: ${PORT}
+      BLUEPRINT_DB_URL: ${BLUEPRINT_DB_URL}
+      QBIT_DOWNLOADS_BASE_DIR: ${QBIT_DOWNLOADS_BASE_DIR}
+    volumes:
+      - sqlite_bp:/app/db
+      - ${QBIT_DOWNLOADS_BASE_DIR}:${QBIT_DOWNLOADS_BASE_DIR}:ro
+volumes:
+  sqlite_bp:
