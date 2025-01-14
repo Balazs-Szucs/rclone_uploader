@@ -101,7 +101,12 @@
     const outputDiv = document.getElementById('output');
     const filesList = document.getElementById('filesList');
     const resetButton = document.getElementById('resetButton');
-    const socket = new WebSocket('ws://localhost:8080/websocket');
+    const port = new URLSearchParams(window.location.search).get('port') || '8050';
+    const socket = new WebSocket(`ws://localhost:${port}/websocket`);
+
+    socket.onopen = function() {
+        console.log('WebSocket connection established');
+    };
 
     socket.onmessage = function(event) {
         const message = event.data;
@@ -113,8 +118,7 @@
         } else if (message === "reset") {
             fetchFiles();
         } else {
-            outputDiv.textContent = message;
-            outputDiv.scrollTop = outputDiv.scrollHeight;
+            outputDiv.textContent = message; // Update the content with the latest message
         }
     };
 
@@ -122,10 +126,22 @@
         console.error('WebSocket error:', error);
     };
 
+    socket.onclose = function(event) {
+        console.log('WebSocket connection closed:', event);
+    };
+
     function fetchFiles() {
         fetch('/files')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(files => {
+                if (!files) {
+                    throw new Error('Files is null');
+                }
                 filesList.innerHTML = '';
                 files.forEach(file => {
                     const li = document.createElement('li');

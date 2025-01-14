@@ -25,8 +25,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 	mux.HandleFunc("/reset", s.resetHandler)
 	mux.HandleFunc("/env", s.getEnvHandler)
 	mux.HandleFunc("/update-env", s.updateEnvHandler)
-	//fileServer := http.FileServer(http.FS(web.Files))
-	//mux.Handle("/assets/", fileServer)
 
 	return s.corsMiddleware(mux)
 }
@@ -104,6 +102,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
 func (s *Server) uploadHTTPHandler(w http.ResponseWriter, r *http.Request) {
 	socket, err := websocket.Accept(w, r, nil)
 	if err != nil {
@@ -131,7 +130,7 @@ func (s *Server) uploadHandler(paths <-chan string, socket *websocket.Conn) {
 }
 
 func (s *Server) indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("cmd/web/index.html")
+	tmpl, err := template.ParseFiles("internal/static/index.html")
 	if err != nil {
 		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
 		return

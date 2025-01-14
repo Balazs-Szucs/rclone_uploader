@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"rclone_upload/internal/uploader"
 	"syscall"
@@ -45,9 +46,16 @@ func main() {
 
 	go gracefulShutdown(server, done)
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8050"
+	}
+
 	go func() {
 		for path := range paths {
-			socket, _, err := websocket.Dial(context.Background(), "ws://localhost:8080/upload", nil)
+			socketURL := fmt.Sprintf("ws://localhost:%s/websocket", port)
+			fmt.Printf("Connecting to websocket at %s\n", socketURL)
+			socket, _, err := websocket.Dial(context.Background(), socketURL, nil)
 			if err != nil {
 				log.Printf("Failed to connect to websocket: %v", err)
 				continue

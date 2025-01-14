@@ -10,10 +10,13 @@ services:
     environment:
       APP_ENV: ${APP_ENV}
       PORT: ${PORT}
-      BLUEPRINT_DB_URL: ${BLUEPRINT_DB_URL}
+      BLUEPRINT_DB_URL: /app/db/database.db
       QBIT_DOWNLOADS_BASE_DIR: ${QBIT_DOWNLOADS_BASE_DIR}
+      RCLONE_CONFIG_PATH: ${RCLONE_CONFIG_PATH}
     volumes:
       - sqlite_bp:/app/db
       - ${QBIT_DOWNLOADS_BASE_DIR}:${QBIT_DOWNLOADS_BASE_DIR}:ro
+      - /usr/bin/rclone:/usr/bin/rclone:ro
+      - ${RCLONE_CONFIG_PATH}:/root/.config/rclone/rclone.conf:ro
 volumes:
   sqlite_bp:
