@@ -101,8 +101,7 @@
     const outputDiv = document.getElementById('output');
     const filesList = document.getElementById('filesList');
     const resetButton = document.getElementById('resetButton');
-    const port = new URLSearchParams(window.location.search).get('port') || '8050';
-    const socket = new WebSocket(`ws://localhost:${port}/websocket`);
+    const socket = new WebSocket(`wss://${window.location.hostname}/websocket`);
 
     socket.onopen = function() {
         console.log('WebSocket connection established');
