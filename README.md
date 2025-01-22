@@ -1,53 +1,113 @@
-# Project rclone_upload
+# Project: **rclone_uploader**
 
-One Paragraph of project description goes here
+A web application that monitors directories for new files, uploads them to remote storage using rclone, and provides a user-friendly web interface for management.  
 
-## Getting Started
+## Features  
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+- Monitors specified directories for new files.  
+- Uploads new files to remote storage using **rclone**.  
+- Displays uploaded files through a web interface.  
+- Allows editing environment variables directly via the web interface.  
+- Supports real-time updates via WebSocket communication.  
 
-## MakeFile
+Whenever a file is uploaded to a watch directory or its subdirectories, the application automatically uploads it to the corresponding remote path using rclone. The application also updates the database with file details, ensuring the web interface reflects the latest uploads.  
 
-Run build make command with tests
-```bash
-make all
-```
+### Example Workflow  
 
-Build the application
-```bash
-make build
-```
+If your watch directory contains the following path:  
+`path/to/watch/directory/book/BookNAME`  
 
-Run the application
-```bash
-make run
-```
-Create DB container
-```bash
-make docker-run
-```
+It will be uploaded to the remote as:  
+`remote:/book/BookNAME`
 
-Shutdown DB Container
-```bash
-make docker-down
-```
 
-DB Integrations Test:
-```bash
-make itest
-```
+This workflow is ideal for setups where multiple services interact, such as:  
 
-Live reload the application:
-```bash
-make watch
-```
+- A **youtube-dl** script downloading YouTube videos.  
+- Automatically uploading downloaded content to remote storage.  
+- Serving content from the remote storage with services like **Jellyfin** or **Plex**.  
 
-Run the test suite:
-```bash
-make test
-```
+For instance, a video downloaded to:  
+`path/to/watch/directory/youtube/youtube_video_name`  
 
-Clean up binary from the last build:
-```bash
-make clean
-```
+Will be uploaded to:  
+`remote:/youtube/youtube_video_name`  
+
+Your Jellyfin/Plex setup can then serve content directly from the remote storage.  
+
+---
+
+## Getting Started  
+
+### Prerequisites  
+
+Create a `.env` file in the root directory with the following content:  
+
+```env
+PORT=8050
+COPY_PARAMS='--progress --ignore-existing --onedrive-chunk-size 120M'
+WATCH_SUBDIRS=s,m,seed
+BLUEPRINT_DB_URL=./internal/db/database.db
+QBIT_DOWNLOADS_BASE_DIR=/path/to/your/downloads
+RCLONE_REMOTE_NAME=your_remote_name
+RCLONE_CONFIG_PATH=/path/to/your/rclone.conf
+APP_ENV=production
+WEBSOCKET_URL=ws://localhost:8050/websocket
+```  
+
+These variables configure the application for local development. Adjust paths and parameters as needed.  
+
+---
+
+## Makefile Commands  
+
+Use the following commands to build, run, and manage the project:  
+
+### Build & Run  
+
+- **Build with make:**  
+  ```bash
+  make all
+  ```  
+
+- **Build the application:**  
+  ```bash
+  make build
+  ```  
+
+- **Run the application:**  
+  ```bash
+  make run
+  ```  
+
+### Database Management  
+
+- **Create DB container:**  
+  ```bash
+  make docker-run
+  ```  
+
+- **Shutdown DB container:**  
+  ```bash
+  make docker-down
+  ```  
+
+### Development  
+
+- **Live reload the application:**  
+  ```bash
+  make watch
+  ```  
+
+- **Clean up binaries from the last build:**  
+  ```bash
+  make clean
+  ```  
+
+---
+
+## Deployment  
+
+For live deployment, ensure all environment variables in the `.env` file are correctly set up for your production environment. Adjust paths, ports, and rclone configuration as required.  
+
+---
