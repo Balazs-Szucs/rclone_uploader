@@ -19,6 +19,7 @@ import (
 var uploadMutex sync.Mutex
 var NewFileChan = make(chan string)
 var ResetChan = make(chan struct{})
+var RcloneOutputChan = make(chan string)
 
 func WatchDirectory(paths chan<- string) {
 	loadEnv()
