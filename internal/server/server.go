@@ -9,7 +9,7 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 
-	"rclone_upload/internal/database"
+	"rclone_uploader/internal/database"
 )
 
 type Server struct {

@@ -3,20 +3,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: prod
     restart: unless-stopped
     ports:
-      - ${PORT}:${PORT}
+      - "${PORT:-8050}:${PORT:-8050}"
+    env_file:
+      - .env
     environment:
-      APP_ENV: ${APP_ENV}
-      PORT: ${PORT}
-      BLUEPRINT_DB_URL: /app/db/database.db
-      QBIT_DOWNLOADS_BASE_DIR: ${QBIT_DOWNLOADS_BASE_DIR}
-      RCLONE_CONFIG_PATH: ${RCLONE_CONFIG_PATH}
+      - PORT=${PORT:-8050}
+      - COPY_PARAMS=${COPY_PARAMS:-'--progress --ignore-existing'}
+      - WATCH_SUBDIRS=${WATCH_SUBDIRS:-s,m,seed}
+      - BLUEPRINT_DB_URL=${BLUEPRINT_DB_URL:-/app/data/database.db}
+      - QBIT_DOWNLOADS_BASE_DIR=${QBIT_DOWNLOADS_BASE_DIR:-/downloads}
+      - RCLONE_REMOTE_NAME=${RCLONE_REMOTE_NAME:-remote}
+      - APP_ENV=${APP_ENV:-development}
+      - WEBSOCKET_URL=${WEBSOCKET_URL:-ws://localhost:${PORT:-8050}/websocket}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:${PORT:-8050}}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - RETRY_DELAY=${RETRY_DELAY:-5}
+      - UPLOAD_TIMEOUT=${UPLOAD_TIMEOUT:-1800}
+      - DB_TIMEOUT=${DB_TIMEOUT:-5}
     volumes:
-      - sqlite_bp:/app/db
-      - ${QBIT_DOWNLOADS_BASE_DIR}:${QBIT_DOWNLOADS_BASE_DIR}:ro
-      - /usr/bin/rclone:/usr/bin/rclone:ro
-      - ${RCLONE_CONFIG_PATH}:/root/.config/rclone/rclone.conf:ro
-volumes:
-  sqlite_bp:
+      - ./data:/app/data
+      - ${QBIT_DOWNLOADS_BASE_DIR:-/downloads}:${QBIT_DOWNLOADS_BASE_DIR:-/downloads}:ro
+      - ${RCLONE_CONFIG_FILE:-./rclone.conf}:/home/appuser/.rclone.conf
+      - ./.env:/app/.env
+    user: "1000:1000"

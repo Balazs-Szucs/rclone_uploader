@@ -1,0 +1,11 @@
+{"level":"info","ts":"2025-05-29T20:07:29.669+0200","caller":"api/main.go:132","msg":"Environment variables loaded from .env file"}
+2025/05/29 20:07:29 Using database URL from environment: ./internal/db/database.db
+2025/05/29 20:07:29 Creating directory for database: internal/db
+2025/05/29 20:07:29 Attempting to open database at: ./internal/db/database.db
+2025/05/29 20:07:29 Watching directory: /home/brios/test/s
+2025/05/29 20:07:29 Watching directory: /home/brios/test/m
+2025/05/29 20:07:29 Watching directory: /home/brios/test/seed
+2025/05/29 20:07:29 Directory watcher started successfully. Monitoring subdirectories: s,m,seed
+{"level":"info","ts":"2025-05-29T20:07:29.670+0200","caller":"api/main.go:97","msg":"Starting server","port":"8050"}
+2025/05/29 20:07:29 Upload worker started
+{"level":"fatal","ts":"2025-05-29T20:07:29.670+0200","caller":"api/main.go:100","msg":"HTTP server error","error":"listen tcp :8050: bind: address already in use","stacktrace":"main.main\n\t/home/brios/GolandProjects/rclone_uploader/cmd/api/main.go:100\nruntime.main\n\t/usr/lib/golang/src/runtime/proc.go:283"}

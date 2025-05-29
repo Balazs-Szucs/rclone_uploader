@@ -1,26 +1,40 @@
-FROM golang:1.23-alpine AS build
-RUN apk add --no-cache alpine-sdk
+# Builder stage
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies including gcc and SQLite
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy source code
 COPY . .
 
-COPY .env /app/.env
+# Enable CGO and build
+ENV CGO_ENABLED=1
+RUN cd cmd/api && go build -o ../../rclone_uploader
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o main cmd/api/main.go
+# Final stage
+FROM alpine:latest
 
-FROM alpine:3.20.1 AS prod
-RUN apk add --no-cache tzdata
-RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rclone
+# Install runtime dependencies
+RUN apk add --no-cache sqlite-dev sqlite-libs ca-certificates rclone
 
+# Create the app directory and data directory first
+RUN mkdir -p /app/data /app/internal && \
+    adduser -D -u 1000 appuser && \
+    chown -R appuser:appuser /app && \
+    chmod 755 /app/data /app/internal
+
+USER appuser
 WORKDIR /app
-COPY --from=build /app/main /app/main
-COPY --from=build /app/.env /app/.env
-COPY --from=build /app/internal/db/database.db /app/db/database.db
-COPY --from=build /app/internal/static /app/internal/static
+COPY --from=builder /app/rclone_uploader .
+COPY --from=builder /app/internal/static/index.html ./internal/static/index.html
 
-EXPOSE ${PORT}
-CMD ["./main"]
+# Use PORT from environment with default
+EXPOSE ${PORT:-8050}
+
+CMD ["./rclone_uploader"]

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -24,13 +26,16 @@ type Service interface {
 	Close() error
 
 	// GetUploadedFiles retrieves the list of uploaded files from the database.
-	GetUploadedFiles() ([]map[string]interface{}, error)
+	GetUploadedFiles(ctx context.Context) ([]map[string]interface{}, error)
 
 	// Exec executes a query with the given arguments.
-	Exec(query string, args ...interface{}) (sql.Result, error)
+	Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 
 	// Reset deletes all records from the files table.
-	Reset() error
+	Reset(ctx context.Context) error
+
+	// CreateFilesTable creates the files table if it doesn't exist.
+	CreateFilesTable() error
 }
 
 type service struct {
@@ -38,49 +43,106 @@ type service struct {
 }
 
 var (
-	dburl      = os.Getenv("BLUEPRINT_DB_URL")
 	dbInstance *service
+	dbMutex    sync.Mutex
 )
 
-func New() Service {
-	// Reuse Connection
-	if dbInstance != nil {
-		return dbInstance
+// ensureConnection ensures that the database connection is active and valid
+func ensureConnection(s *service) error {
+	if s.db == nil {
+		return fmt.Errorf("database connection is nil")
 	}
 
+	// Try to ping the database
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	if err := s.db.PingContext(ctx); err != nil {
+		log.Printf("Database connection lost, attempting to reconnect...")
+		return initializeDB()
+	}
+
+	return nil
+}
+
+func initializeDB() error {
+	// Get database URL from environment or use default
+	dburl := os.Getenv("BLUEPRINT_DB_URL")
+	if dburl == "" {
+		// Create data directory if it doesn't exist
+		if err := os.MkdirAll("data", 0755); err != nil {
+			return fmt.Errorf("failed to create data directory: %w", err)
+		}
+		dburl = "data/rclone_uploader.db"
+		log.Printf("BLUEPRINT_DB_URL not set, using default: %s", dburl)
+	} else {
+		log.Printf("Using database URL from environment: %s", dburl)
+		// Ensure the directory for the database file exists
+		dir := filepath.Dir(dburl)
+		if dir != "." && dir != "/" {
+			log.Printf("Creating directory for database: %s", dir)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				log.Printf("Failed to create database directory %s: %v", dir, err)
+				return fmt.Errorf("failed to create database directory %s: %w", dir, err)
+			}
+		}
+	}
+
+	log.Printf("Attempting to open database at: %s", dburl)
 	db, err := sql.Open("sqlite3", dburl)
 	if err != nil {
-		// This will not be a connection error, but a DSN parse error or
-		// another initialization error.
-		log.Fatal(err)
+		log.Printf("Failed to open database %s: %v", dburl, err)
+		return fmt.Errorf("failed to open database: %w", err)
 	}
 
-	dbInstance = &service{
-		db: db,
-	}
+	// Set connection pool settings
+	db.SetMaxOpenConns(1) // SQLite only supports one writer at a time
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(time.Hour)
+
+	dbInstance = &service{db: db}
 
 	// Create files table
 	if err := dbInstance.CreateFilesTable(); err != nil {
+		db.Close()
+		return fmt.Errorf("failed to create files table: %w", err)
+	}
+
+	return nil
+}
+
+func New() Service {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	if dbInstance != nil {
+		// Ensure the connection is still valid
+		if err := ensureConnection(dbInstance); err != nil {
+			log.Printf("Error ensuring database connection: %v", err)
+			// Connection is invalid, try to reinitialize
+			if err := initializeDB(); err != nil {
+				log.Fatal(err)
+			}
+		}
+		return dbInstance
+	}
+
+	// Initialize new database connection
+	if err := initializeDB(); err != nil {
 		log.Fatal(err)
 	}
 
 	return dbInstance
 }
 
-// Health checks the health of the database connection by pinging the database.
-// It returns a map with keys indicating various health statistics.
+// Health checks the health of the database connection
 func (s *service) Health() map[string]string {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
 	stats := make(map[string]string)
 
-	// Ping the database
-	err := s.db.PingContext(ctx)
-	if err != nil {
+	// Check connection
+	if err := ensureConnection(s); err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
-		log.Fatalf("db down: %v", err) // Log the error and terminate the program
 		return stats
 	}
 
@@ -88,7 +150,7 @@ func (s *service) Health() map[string]string {
 	stats["status"] = "up"
 	stats["message"] = "It's healthy"
 
-	// Get database stats (like open connections, in use, idle, etc.)
+	// Get database stats
 	dbStats := s.db.Stats()
 	stats["open_connections"] = strconv.Itoa(dbStats.OpenConnections)
 	stats["in_use"] = strconv.Itoa(dbStats.InUse)
@@ -98,33 +160,13 @@ func (s *service) Health() map[string]string {
 	stats["max_idle_closed"] = strconv.FormatInt(dbStats.MaxIdleClosed, 10)
 	stats["max_lifetime_closed"] = strconv.FormatInt(dbStats.MaxLifetimeClosed, 10)
 
-	// Evaluate stats to provide a health message
-	if dbStats.OpenConnections > 40 { // Assuming 50 is the max for this example
-		stats["message"] = "The database is experiencing heavy load."
-	}
-
-	if dbStats.WaitCount > 1000 {
-		stats["message"] = "The database has a high number of wait events, indicating potential bottlenecks."
-	}
-
-	if dbStats.MaxIdleClosed > int64(dbStats.OpenConnections)/2 {
-		stats["message"] = "Many idle connections are being closed, consider revising the connection pool settings."
-	}
-
-	if dbStats.MaxLifetimeClosed > int64(dbStats.OpenConnections)/2 {
-		stats["message"] = "Many connections are being closed due to max lifetime, consider increasing max lifetime or revising the connection usage pattern."
-	}
-
 	return stats
 }
 
 // Close closes the database connection.
-// It logs a message indicating the disconnection from the specific database.
-// If the connection is successfully closed, it returns nil.
-// If an error occurs while closing the connection, it returns the error.
 func (s *service) Close() error {
-	log.Printf("Disconnected from database: %s", dburl)
-	return s.db.Close()
+	// Don't actually close the connection since it's a singleton
+	return nil
 }
 
 func (s *service) CreateFilesTable() error {
@@ -139,37 +181,59 @@ func (s *service) CreateFilesTable() error {
 	return err
 }
 
-func (s *service) GetUploadedFiles() ([]map[string]interface{}, error) {
-	rows, err := s.db.Query("SELECT id, name, path, uploaded_at FROM files")
+// GetUploadedFiles retrieves all uploaded files from the database
+func (s *service) GetUploadedFiles(ctx context.Context) ([]map[string]interface{}, error) {
+	if err := ensureConnection(s); err != nil {
+		return nil, fmt.Errorf("database connection error: %w", err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT name, path, uploaded_at 
+		FROM files 
+		ORDER BY uploaded_at DESC
+	`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query files: %w", err)
 	}
 	defer rows.Close()
 
 	var files []map[string]interface{}
 	for rows.Next() {
-		var id int
 		var name, path string
 		var uploadedAt time.Time
-		if err := rows.Scan(&id, &name, &path, &uploadedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(&name, &path, &uploadedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 		files = append(files, map[string]interface{}{
-			"id":          id,
 			"name":        name,
 			"path":        path,
 			"uploaded_at": uploadedAt,
 		})
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return files, nil
 }
 
-func (s *service) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return s.db.Exec(query, args...)
+func (s *service) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	if err := ensureConnection(s); err != nil {
+		return nil, fmt.Errorf("database connection error: %w", err)
+	}
+	return s.db.ExecContext(ctx, query, args...)
 }
 
-func (s *service) Reset() error {
+func (s *service) Reset(ctx context.Context) error {
+	if err := ensureConnection(s); err != nil {
+		return fmt.Errorf("database connection error: %w", err)
+	}
+
 	query := `DELETE FROM files`
-	_, err := s.db.Exec(query)
-	return err
+	_, err := s.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to reset database: %w", err)
+	}
+	return nil
 }
