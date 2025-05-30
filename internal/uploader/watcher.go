@@ -382,7 +382,7 @@ func uploadWithLock(path string, socket *websocket.Conn) error {
 		return fmt.Errorf("RCLONE_REMOTE_NAME is empty")
 	}
 
-	destPath := filepath.Join(rcloneRemoteName+":", relPath)
+	destPath := filepath.Join(rcloneRemoteName+"", relPath)
 	args := append([]string{"copy"}, splitParams(copyParams)...)
 	args = append(args, path, destPath)
 
